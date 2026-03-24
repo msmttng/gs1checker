@@ -30,21 +30,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const config = {
-            fps: 10,
-            qrbox: { width: 280, height: 100 },
+            fps: 15, // スキャン頻度を上げて認識率アップ
+            qrbox: { width: 280, height: 180 }, // 読み取り枠を縦方向にも広げる
             aspectRatio: 1.0,
-            formatsToSupport: [
-                Html5QrcodeSupportedFormats.DATA_MATRIX,
-                Html5QrcodeSupportedFormats.GS1_128,
-                Html5QrcodeSupportedFormats.CODE_128,
-                Html5QrcodeSupportedFormats.QR_CODE,
-                Html5QrcodeSupportedFormats.EAN_13
-            ]
+            useBarCodeDetectorIfSupported: true // [重要] iOS本来の強力なAIバーコードエンジンを優先使用
         };
 
-        // UIなしで直接背面カメラ（environment）を指定して起動
+        // 連続オートフォーカス（ピント合わせ）をカメラ機能に要求
+        const constraints = { 
+            facingMode: { exact: "environment" },
+            advanced: [{ focusMode: "continuous" }]
+        };
+
+        // UIなしで直接背面カメラを指定して起動
         html5QrCode.start(
-            { facingMode: { exact: "environment" } },
+            constraints,
             config,
             onScanSuccess,
             onScanFailure
