@@ -1,15 +1,17 @@
-document.addEventListener('DOMContentLoaded', async () => {
+document.addEventListener('DOMContentLoaded', () => {
     // -------------------------------------------------------------
     // UI 要素の取得
     // -------------------------------------------------------------
-    const scannerPanel = document.getElementById('scanner-panel');
+    const inputPanel = document.getElementById('input-panel');
     const loadingPanel = document.getElementById('loading-panel');
     const resultPanel = document.getElementById('result-panel');
+    
+    // AsReader用の入力フィールドとフォーム
+    const barcodeInput = document.getElementById('barcode-input');
+    const scannerForm = document.getElementById('scanner-form');
     const scanAgainBtn = document.getElementById('scan-again-btn');
-    const startPanel = document.getElementById('start-panel');
-    const startCameraBtn = document.getElementById('start-camera-btn');
-    const videoElement = document.getElementById('video-stream');
 
+    // 検索結果表示用
     const elName = document.getElementById('res-name');
     const elGtin = document.getElementById('res-gtin');
     const elStock = document.getElementById('res-stock');
@@ -22,121 +24,59 @@ document.addEventListener('DOMContentLoaded', async () => {
     const GAS_URL = "https://script.google.com/macros/s/AKfycbwDhj91LpWaF6OWhTmr6hbYLgScu0tlBcs2Y4nyXvg2WAwybHYGd5-V579tf0I5_H2dCQ/exec";
 
     // -------------------------------------------------------------
-    // 最新鋭システム「ZBar WASM (Polyfill)」の初期化
+    // AsReader 連携ロジック (HIDキーボードエミュレーション)
     // -------------------------------------------------------------
-    let isScanning = false;
-    let cameraStream = null;
-    let barcodeDetector = null;
-
-    try {
-        // undecafの極秘ポリフィル機能を使って、iPhoneにバーコード探知APIをインストール
-        window.BarcodeDetector = barcodeDetectorPolyfill.install();
-        
-        // DataBar（GS1 DataBar Limited等）および DataBarExpanded を最優先で読み取るように設定
-        barcodeDetector = new window.BarcodeDetector({ 
-            formats: ['databar', 'databar_exp', 'code_128', 'data_matrix', 'ean_13', 'qr_code'] 
-        });
-        console.log("ZBar DataBar Engine Initialized!");
-    } catch (e) {
-        alert("ZBarエンジン初期化エラー: 画面を再読み込みしてください。");
-        console.error(e);
-    }
-
-    // -------------------------------------------------------------
-    // カメラとスキャナーの起動
-    // -------------------------------------------------------------
-    if (startCameraBtn) {
-        startCameraBtn.addEventListener('click', async () => {
-            startPanel.classList.add('hidden');
-            await startScanner();
-        });
-    }
-
-    async function startScanner() {
-        scannerPanel.classList.remove('hidden');
-        resultPanel.classList.add('hidden');
-        loadingPanel.classList.add('hidden');
-
-        try {
-            // [要警戒] 画質などを指定すると古いiOSですぐエラーになるため、
-            // 完全に何も指定せず「裏のカメラ」という一番シンプルな要求だけを送る
-            cameraStream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: "environment" },
-                audio: false
-            });
-
-            videoElement.srcObject = cameraStream;
-            videoElement.setAttribute("playsinline", true); // iOSで全画面化するのを防ぐ
-            videoElement.play();
-
-            isScanning = true;
-            processFrame(); // バーコード探索ループ起動
-
-        } catch (err) {
-            alert("カメラの起動に失敗しました: " + err.message);
-            // 失敗時はスタート画面に戻す
-            startPanel.classList.remove('hidden');
-            scannerPanel.classList.add('hidden');
+    
+    // 常にインプットフィールドにフォーカスを当てておく（トリガーを押すだけで入力されるようにする）
+    function refocus() {
+        if (barcodeInput) {
+            barcodeInput.value = '';
+            // iOS Safariでソフトウェアキーボードが不要に上がらないようにするための制御
+            // （ただしAsReader接続中は通常ソフトウェアキーボードは非表示になります）
+            barcodeInput.focus();
         }
     }
 
-    // -------------------------------------------------------------
-    // ZBarによる映像解析ループ
-    // -------------------------------------------------------------
-    async function processFrame() {
-        if (!isScanning) return;
+    // 画面ロード時に自動フォーカス
+    setTimeout(refocus, 300);
 
-        // 映像の準備ができているか確認
-        if (videoElement.readyState === videoElement.HAVE_ENOUGH_DATA && barcodeDetector) {
-            try {
-                // ここが心臓部：最強のZBarエンジンで映像解析
-                const barcodes = await barcodeDetector.detect(videoElement);
-
-                if (barcodes.length > 0) {
-                    const decodedText = barcodes[0].rawValue;
-                    onScanSuccess(decodedText);
-                    return; // 成功した場合は次のループを終了
-                }
-            } catch (e) {
-                // 映像が瞬間的に乱れるなどした通常エラーは無視して進める
-            }
+    // AsReaderがバーコードを読み取り、最後に「Enter（改行）」を入力した瞬間に発動
+    scannerForm.addEventListener('submit', (e) => {
+        e.preventDefault(); // 画面リロードを防ぐ
+        const rawCode = barcodeInput.value.trim();
+        if (rawCode) {
+            processScannedCode(rawCode);
         }
-        
-        // 読めなかった場合は少し休んでから次を探索 (スマホの熱暴走を防ぐため150ms待機)
-        setTimeout(() => {
-            if (isScanning) {
-                requestAnimationFrame(processFrame);
-            }
-        }, 150);
-    }
+    });
 
     // -------------------------------------------------------------
-    // 読み取り成功時の処理とGAS通信
+    // GTIN抽出とGASへのデータ送信
     // -------------------------------------------------------------
-    function onScanSuccess(decodedText) {
-        isScanning = false; // ループを止める
-
-        // [非常に重要] GS1データから各種ノイズ（ ]C1 や 括弧など）を除去
+    function processScannedCode(decodedText) {
+        // [超強力なフィルター] GS1データから各種ノイズ（ ]C1 や ]d2、括弧など）を除去
+        // AsReaderは高精度なのでシンボル識別子を先頭に出力する設定になっている場合があります
         let cleanText = decodedText.replace(/^\][A-Za-z]\d/, ''); 
         cleanText = cleanText.replace(/[\(\)]/g, '');
 
         let gtin = cleanText;
 
-        // "01" に続く14桁の数字（GTIN）を抽出
+        // "01" に続く14桁の数字（PTPシートなどのGTIN）を抽出
         const gtinMatch = cleanText.match(/01(\d{14})/);
         if (gtinMatch) {
             gtin = gtinMatch[1];
         } else if (/^\d{13,14}$/.test(cleanText)) {
-            // 13桁のJAN等の場合は先頭に0を追加して14桁化
+            // JANコード等の場合は先頭に0を追加して14桁化
             gtin = cleanText.length === 13 ? '0' + cleanText : cleanText;
         }
 
-        scannerPanel.classList.add('hidden');
+        // 入力パネルを隠してローディング画面を出す
+        inputPanel.classList.add('hidden');
         loadingPanel.classList.remove('hidden');
         
-        // デバッグ用に生データを画面に表示
-        loadingCode.innerHTML = `判定GTIN: <b style="color:#fff;">${gtin}</b><br><span style="font-size:0.7rem;color:#94a3b8;word-break:break-all;">(生データ: ${decodedText})</span>`;
+        // デバッグ用に抽出データを画面に表示
+        loadingCode.innerHTML = `判定GTIN: <b style="color:#fff;">${gtin}</b><br><span style="font-size:0.7rem;color:#94a3b8;word-break:break-all;">(AsReader生データ: ${decodedText})</span>`;
 
+        // GASへ問い合わせ
         fetchDataFromGAS(gtin, cleanText);
     }
 
@@ -162,6 +102,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
+    // -------------------------------------------------------------
+    // 結果表示ロジック
+    // -------------------------------------------------------------
     function displayResults(data, gtin) {
         loadingPanel.classList.add('hidden');
         resultPanel.classList.remove('hidden');
@@ -194,8 +137,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 「続けてスキャン」ボタン
     // -------------------------------------------------------------
     if (scanAgainBtn) {
-        scanAgainBtn.addEventListener('click', async () => {
-            await startScanner();
+        scanAgainBtn.addEventListener('click', () => {
+            // 結果画面を隠して、入力画面に戻す
+            resultPanel.classList.add('hidden');
+            inputPanel.classList.remove('hidden');
+            // 即座に次のバーコードを待機
+            refocus();
         });
     }
 });
