@@ -36,10 +36,9 @@ document.addEventListener('DOMContentLoaded', () => {
             useBarCodeDetectorIfSupported: true // [重要] iOS本来の強力なAIバーコードエンジンを優先使用
         };
 
-        // 連続オートフォーカス（ピント合わせ）をカメラ機能に要求
+        // カメラの条件が厳しすぎるとiOSで起動エラー（OverconstrainedError）になるため、条件を緩める
         const constraints = { 
-            facingMode: { exact: "environment" },
-            advanced: [{ focusMode: "continuous" }]
+            facingMode: "environment" 
         };
 
         // UIなしで直接背面カメラを指定して起動
