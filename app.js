@@ -31,6 +31,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 fps: 10, 
                 qrbox: { width: 280, height: 100 },
                 aspectRatio: 1.0,
+                videoConstraints: {
+                    facingMode: "environment" // 外カメラ（背面）を優先
+                },
                 formatsToSupport: [
                     Html5QrcodeSupportedFormats.DATA_MATRIX,
                     Html5QrcodeSupportedFormats.GS1_128,
