@@ -63,17 +63,28 @@ document.addEventListener('DOMContentLoaded', () => {
             html5QrCode.stop().catch(err => console.error(err));
         }
 
-        let gtin = decodedText;
-        const gtinMatch = decodedText.replace(/[\(\)]/g, '').match(/^01(\d{14})/);
+        // GS1データから各種ノイズ（シンボル識別子 ]C1 や 括弧）を除去
+        let cleanText = decodedText.replace(/^\][A-Za-z]\d/, ''); 
+        cleanText = cleanText.replace(/[\(\)]/g, '');
+
+        let gtin = cleanText;
+
+        // "01" に続く14桁の数字（GTIN）を抽出
+        const gtinMatch = cleanText.match(/01(\d{14})/);
         if (gtinMatch) {
             gtin = gtinMatch[1];
+        } else if (/^\d{13,14}$/.test(cleanText)) {
+            // 13桁（通常のJANバーコードなど）の場合は先頭に0を追加して14桁化
+            gtin = cleanText.length === 13 ? '0' + cleanText : cleanText;
         }
 
         scannerPanel.classList.add('hidden');
         loadingPanel.classList.remove('hidden');
-        loadingCode.textContent = `GS1: ${gtin}`;
+        
+        // 読み取りのバグ調査用に、画面に生データと抽出後のGTINを両方表示します
+        loadingCode.innerHTML = `判定GTIN: <b style="color:#fff;">${gtin}</b><br><span style="font-size:0.7rem;color:#94a3b8;word-break:break-all;">(生データ: ${decodedText})</span>`;
 
-        fetchDataFromGAS(gtin, decodedText);
+        fetchDataFromGAS(gtin, cleanText);
     }
 
     function onScanFailure(error) {
