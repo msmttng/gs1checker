@@ -13,6 +13,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const elDelivery = document.getElementById('res-delivery');
     const elStatus = document.getElementById('res-status');
     const loadingCode = document.getElementById('loading-code-display');
+    const startPanel = document.getElementById('start-panel');
+    const startCameraBtn = document.getElementById('start-camera-btn');
+
+    if (startCameraBtn) {
+        startCameraBtn.addEventListener('click', () => {
+            startPanel.classList.add('hidden');
+            startScanner();
+        });
+    }
 
     let html5QrCode;
     
@@ -167,5 +176,7 @@ document.addEventListener('DOMContentLoaded', () => {
         startScanner();
     });
 
-    startScanner();
+    // iPhone Safariではユーザーの画面タップなしにカメラを自動起動するとセキュリティブロックされるため、
+    // ページ読み込み時（起動時）の自動スタートを廃止し、ボタンタップで起動するように変更しました。
+    // startScanner(); 
 });
