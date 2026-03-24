@@ -44,13 +44,9 @@ document.addEventListener('DOMContentLoaded', () => {
         loadingPanel.classList.add('hidden');
 
         try {
-            // [1] ネイティブのカメラストリームをごく普通のパラメータで要求（失敗しにくい）
+            // [1] ネイティブのカメラストリームを最も安全なパラメータで要求（起動失敗を防ぐ）
             cameraStream = await navigator.mediaDevices.getUserMedia({
-                video: {
-                    facingMode: "environment",
-                    width: { ideal: 1920 }, // フルHD解像度を要求（DataBar Limitedのような細かすぎるバーコードのピクセル潰れを防ぐため）
-                    height: { ideal: 1080 }
-                },
+                video: { facingMode: "environment" },
                 audio: false
             });
 
