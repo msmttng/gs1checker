@@ -14,7 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const elStatus = document.getElementById('res-status');
     const loadingCode = document.getElementById('loading-code-display');
 
-    let html5QrcodeScanner;
+    let html5QrCode;
     
     // 【重要】ここに現在のGASのURL (AKfycb...) を入れます
     const GAS_URL = "https://script.google.com/macros/s/AKfycbwDhj91LpWaF6OWhTmr6hbYLgScu0tlBcs2Y4nyXvg2WAwybHYGd5-V579tf0I5_H2dCQ/exec";
@@ -25,31 +25,42 @@ document.addEventListener('DOMContentLoaded', () => {
         resultPanel.classList.add('hidden');
         loadingPanel.classList.add('hidden');
 
-        html5QrcodeScanner = new Html5QrcodeScanner(
-            "reader", 
-            { 
-                fps: 10, 
-                qrbox: { width: 280, height: 100 },
-                aspectRatio: 1.0,
-                videoConstraints: {
-                    facingMode: "environment" // 外カメラ（背面）を優先
-                },
-                formatsToSupport: [
-                    Html5QrcodeSupportedFormats.DATA_MATRIX,
-                    Html5QrcodeSupportedFormats.GS1_128,
-                    Html5QrcodeSupportedFormats.CODE_128,
-                    Html5QrcodeSupportedFormats.QR_CODE,
-                    Html5QrcodeSupportedFormats.EAN_13
-                ]
-            }, 
-            false
-        );
-        html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+        if (!html5QrCode) {
+            html5QrCode = new Html5Qrcode("reader");
+        }
+
+        const config = {
+            fps: 10,
+            qrbox: { width: 280, height: 100 },
+            aspectRatio: 1.0,
+            formatsToSupport: [
+                Html5QrcodeSupportedFormats.DATA_MATRIX,
+                Html5QrcodeSupportedFormats.GS1_128,
+                Html5QrcodeSupportedFormats.CODE_128,
+                Html5QrcodeSupportedFormats.QR_CODE,
+                Html5QrcodeSupportedFormats.EAN_13
+            ]
+        };
+
+        // UIなしで直接背面カメラ（environment）を指定して起動
+        html5QrCode.start(
+            { facingMode: { exact: "environment" } },
+            config,
+            onScanSuccess,
+            onScanFailure
+        ).catch((err) => {
+            console.warn("背面カメラの起動に失敗。通常の環境カメラを試します", err);
+            html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, onScanFailure).catch(e => {
+                console.warn("カメラ起動失敗:", e);
+                // PC等の場合へのフォールバック
+                html5QrCode.start({ facingMode: "user" }, config, onScanSuccess, onScanFailure);
+            });
+        });
     }
 
     function onScanSuccess(decodedText, decodedResult) {
-        if (html5QrcodeScanner) {
-            html5QrcodeScanner.clear();
+        if (html5QrCode && html5QrCode.isScanning) {
+            html5QrCode.stop().catch(err => console.error(err));
         }
 
         let gtin = decodedText;
