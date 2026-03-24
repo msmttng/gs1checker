@@ -1,11 +1,22 @@
+// ES Modulesを使って zxing-wasm (超高精度C++エンジン) を読み込む
+import { readBarcodesFromVideoElement, setZXingModuleOverrides } from "https://cdn.jsdelivr.net/npm/zxing-wasm@3.3.1/dist/reader/index.js";
+
+// WASMファイルのロード先をCDNに強制設定
+setZXingModuleOverrides({
+  locateFile: (path, prefix) => {
+    return `https://cdn.jsdelivr.net/npm/zxing-wasm@3.3.1/dist/reader/${path}`;
+  }
+});
+
 document.addEventListener('DOMContentLoaded', () => {
-    // Elements
     const scannerPanel = document.getElementById('scanner-panel');
     const loadingPanel = document.getElementById('loading-panel');
     const resultPanel = document.getElementById('result-panel');
     const scanAgainBtn = document.getElementById('scan-again-btn');
+    const startPanel = document.getElementById('start-panel');
+    const startCameraBtn = document.getElementById('start-camera-btn');
+    const videoElement = document.getElementById('video-stream');
 
-    // Display Elements
     const elName = document.getElementById('res-name');
     const elGtin = document.getElementById('res-gtin');
     const elStock = document.getElementById('res-stock');
@@ -13,63 +24,103 @@ document.addEventListener('DOMContentLoaded', () => {
     const elDelivery = document.getElementById('res-delivery');
     const elStatus = document.getElementById('res-status');
     const loadingCode = document.getElementById('loading-code-display');
-    const startPanel = document.getElementById('start-panel');
-    const startCameraBtn = document.getElementById('start-camera-btn');
 
-    if (startCameraBtn) {
-        startCameraBtn.addEventListener('click', () => {
-            startPanel.classList.add('hidden');
-            startScanner();
-        });
-    }
-
-    let html5QrCode;
-    
     // 【重要】ここに現在のGASのURL (AKfycb...) を入れます
     const GAS_URL = "https://script.google.com/macros/s/AKfycbwDhj91LpWaF6OWhTmr6hbYLgScu0tlBcs2Y4nyXvg2WAwybHYGd5-V579tf0I5_H2dCQ/exec";
 
-    // Initialize scanner
-    function startScanner() {
+    let isScanning = false;
+    let cameraStream = null;
+
+    if (startCameraBtn) {
+        startCameraBtn.addEventListener('click', async () => {
+            startPanel.classList.add('hidden');
+            await startScanner();
+        });
+    }
+
+    async function startScanner() {
         scannerPanel.classList.remove('hidden');
         resultPanel.classList.add('hidden');
         loadingPanel.classList.add('hidden');
 
-        if (!html5QrCode) {
-            html5QrCode = new Html5Qrcode("reader");
-        }
-
-        const config = {
-            fps: 15, // スキャン頻度を上げて認識率アップ
-            qrbox: { width: 280, height: 180 }, // 読み取り枠を縦方向にも広げる
-            aspectRatio: 1.0,
-            useBarCodeDetectorIfSupported: true // [重要] iOS本来の強力なAIバーコードエンジンを優先使用
-        };
-
-        // カメラの条件が厳しすぎるとiOSで起動エラー（OverconstrainedError）になるため、条件を緩める
-        const constraints = { 
-            facingMode: "environment" 
-        };
-
-        // UIなしで直接背面カメラを指定して起動
-        html5QrCode.start(
-            constraints,
-            config,
-            onScanSuccess,
-            onScanFailure
-        ).catch((err) => {
-            console.warn("背面カメラの起動に失敗。通常の環境カメラを試します", err);
-            html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, onScanFailure).catch(e => {
-                console.warn("カメラ起動失敗:", e);
-                // PC等の場合へのフォールバック
-                html5QrCode.start({ facingMode: "user" }, config, onScanSuccess, onScanFailure);
+        try {
+            // [1] ネイティブのカメラストリームをごく普通のパラメータで要求（失敗しにくい）
+            cameraStream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    facingMode: "environment",
+                    width: { ideal: 1920 }, // フルHD解像度を要求（DataBar Limitedのような細かすぎるバーコードのピクセル潰れを防ぐため）
+                    height: { ideal: 1080 }
+                },
+                audio: false
             });
-        });
+
+            // [2] 取得した映像をHTMLの<video>タグに流し込む
+            videoElement.srcObject = cameraStream;
+            videoElement.setAttribute("playsinline", true); // iOS Safariで全画面になるのを防ぐ
+            videoElement.play();
+
+            // [3] C++エンジンでの解析ループをスタート
+            isScanning = true;
+            processFrame();
+
+        } catch (err) {
+            alert("カメラの起動に失敗しました: " + err.message);
+            // エラー時はスタートパネルに戻す
+            startPanel.classList.remove('hidden');
+            scannerPanel.classList.add('hidden');
+        }
     }
 
-    function onScanSuccess(decodedText, decodedResult) {
-        if (html5QrCode && html5QrCode.isScanning) {
-            html5QrCode.stop().catch(err => console.error(err));
+    async function processFrame() {
+        if (!isScanning) return;
+
+        // videoの準備ができているか確認
+        if (videoElement.readyState === videoElement.HAVE_ENOUGH_DATA) {
+            try {
+                // [超重要] ZXing WASM による最強の解析処理
+                const scanResults = await readBarcodesFromVideoElement(videoElement, {
+                    tryHarder: true, // 多少ぼやけていてもしつこく解析する
+                    maxNumberOfSymbols: 1,
+                    formats: [
+                        "DataBar",          // これがGS1 DataBar (PTPシートに印字されている究極に細かいバーコード) です！！
+                        "DataBarExpanded",  // これもDataBar派生
+                        "DataMatrix",       // GS1 DataMatrix用
+                        "Code128",          // GS1-128の外箱用
+                        "QRCode"            // 汎用
+                    ]
+                });
+
+                if (scanResults.length > 0) {
+                    const decodedText = scanResults[0].text;
+                    onScanSuccess(decodedText);
+                    return; // 成功した場合は次のループを呼ばない（停止）
+                }
+            } catch (e) {
+                console.error("解析エラー:", e);
+                // 通常のエラーは無視して進める
+            }
         }
+        
+        // 読めなかった場合は、少し休んで（例: 200ミリ秒後）次を探索する
+        // requestAnimationFrameより少し間引くことでスマホの発熱とフリーズを防ぐ
+        setTimeout(() => {
+            if (isScanning) {
+                requestAnimationFrame(processFrame);
+            }
+        }, 150);
+    }
+
+    function onScanSuccess(decodedText) {
+        // スキャン停止
+        isScanning = false;
+        
+        // （任意）カメラの電源を切る（連続スキャンを早くしたい場合は切らずにCSSで隠すだけでもOK）
+        /*
+        if (cameraStream) {
+            cameraStream.getTracks().forEach(t => t.stop());
+            cameraStream = null;
+        }
+        */
 
         // GS1データから各種ノイズ（シンボル識別子 ]C1 や 括弧）を除去
         let cleanText = decodedText.replace(/^\][A-Za-z]\d/, ''); 
@@ -82,49 +133,37 @@ document.addEventListener('DOMContentLoaded', () => {
         if (gtinMatch) {
             gtin = gtinMatch[1];
         } else if (/^\d{13,14}$/.test(cleanText)) {
-            // 13桁（通常のJANバーコードなど）の場合は先頭に0を追加して14桁化
+            // 13桁の場合は先頭に0を追加して14桁化
             gtin = cleanText.length === 13 ? '0' + cleanText : cleanText;
         }
 
         scannerPanel.classList.add('hidden');
         loadingPanel.classList.remove('hidden');
         
-        // 読み取りのバグ調査用に、画面に生データと抽出後のGTINを両方表示します
+        // 生データを画面に表示（バグ調査用）
         loadingCode.innerHTML = `判定GTIN: <b style="color:#fff;">${gtin}</b><br><span style="font-size:0.7rem;color:#94a3b8;word-break:break-all;">(生データ: ${decodedText})</span>`;
 
         fetchDataFromGAS(gtin, cleanText);
     }
 
-    function onScanFailure(error) {
-        // 継続スキャン
-    }
-
     async function fetchDataFromGAS(gtin, rawCode) {
         try {
-            // 既存のRESTfulなGASの仕様に従い、POSTリクエストでJSONペイロードを送信
-            const payload = {
-                action: 'search_gs1',
-                gtin: gtin,
-                rawCode: rawCode
-            };
+            const payload = { action: 'search_gs1', gtin: gtin, rawCode: rawCode };
 
             const response = await fetch(GAS_URL, {
                 method: 'POST',
-                // Text/plain を使うことでGAS側CORSのプリフライトを回避しつつ、bodyはJSONとする
                 headers: { 'Content-Type': 'text/plain' },
                 body: JSON.stringify(payload)
             });
 
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
+            if (!response.ok) { throw new Error(`HTTP error! status: ${response.status}`); }
 
             const data = await response.json();
             displayResults(data, gtin);
 
         } catch (error) {
             console.error("API Fetch Error:", error);
-            setTimeout(() => displayMockData(gtin), 800);
+            setTimeout(() => displayMockData(gtin, rawCode), 800); // 失敗時はモック
         }
     }
 
@@ -133,13 +172,9 @@ document.addEventListener('DOMContentLoaded', () => {
         resultPanel.classList.remove('hidden');
 
         if (data.status === 'error') {
-            elName.textContent = "エラー";
-            elGtin.textContent = gtin;
-            elStock.textContent = "--";
-            elShelf.textContent = "--";
-            elDelivery.textContent = data.message || "エラーが発生しました";
-            elStatus.className = "status-badge error";
-            elStatus.textContent = "取得失敗";
+            elName.textContent = "エラー"; elGtin.textContent = gtin; elStock.textContent = "--";
+            elShelf.textContent = "--"; elDelivery.textContent = data.message || "エラーが発生しました";
+            elStatus.className = "status-badge error"; elStatus.textContent = "取得失敗";
             return;
         }
 
@@ -149,34 +184,18 @@ document.addEventListener('DOMContentLoaded', () => {
         elShelf.textContent = data.shelf || "未設定";
         elDelivery.textContent = data.lastDeliveryDate || "--";
 
-        if (data.stock > 0) {
-            elStatus.className = "status-badge success";
-            elStatus.textContent = "在庫あり";
-        } else if (data.stock === 0) {
-            elStatus.className = "status-badge warning";
-            elStatus.textContent = "品切れ";
-        } else {
-            elStatus.className = "status-badge error";
-            elStatus.textContent = "登録なし";
-        }
+        if (data.stock > 0) { elStatus.className = "status-badge success"; elStatus.textContent = "在庫あり"; } 
+        else if (data.stock === 0) { elStatus.className = "status-badge warning"; elStatus.textContent = "品切れ"; } 
+        else { elStatus.className = "status-badge error"; elStatus.textContent = "登録なし"; }
     }
 
-    function displayMockData(gtin) {
-        const mock = {
-            productName: "カロナール錠 500mg 100錠入",
-            stock: 12,
-            shelf: "B-2 棚",
-            lastDeliveryDate: "2026/03/24 (メディセオ)",
-            status: "ok"
-        };
+    function displayMockData(gtin, rawCode) {
+        const mock = { productName: "カロナール錠 500mg 100錠入", stock: 12, shelf: "B-2 棚", lastDeliveryDate: "2026/03/24 (メディセオ)", status: "ok" };
         displayResults(mock, gtin);
     }
 
-    scanAgainBtn.addEventListener('click', () => {
-        startScanner();
+    scanAgainBtn.addEventListener('click', async () => {
+        // 再度スキャン開始（カメラは起動しっぱなしなら映像プレビューを再開するだけ）
+        await startScanner();
     });
-
-    // iPhone Safariではユーザーの画面タップなしにカメラを自動起動するとセキュリティブロックされるため、
-    // ページ読み込み時（起動時）の自動スタートを廃止し、ボタンタップで起動するように変更しました。
-    // startScanner(); 
 });

@@ -5,35 +5,46 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>医薬品スキャナー</title>
+  <title>医薬品スキャナー (DataBar Limited完全対応版)</title>
   <link rel="stylesheet" href="style.css">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <!-- html5-qrcode library for scanning -->
-  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  
+  <!-- zxing-wasmに必要なパス解決設定を直接グローバルに宣言 (CDN環境) -->
+  <script type="importmap">
+    {
+      "imports": {
+        "zxing-wasm/": "https://cdn.jsdelivr.net/npm/zxing-wasm@3.3.1/dist/"
+      }
+    }
+  </script>
 </head>
 <body>
   <div id="app">
     <header class="app-header">
       <div class="logo">
         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon"><path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z"/><path d="m8.5 8.5 7 7"/></svg>
-        <h1>PharmaScan</h1>
+        <h1>PharmaScan Pro</h1>
       </div>
-      <p>GS1バーコードスキャナー</p>
+      <p style="color:var(--primary);">PTPシート等 GS1 DataBar 対応</p>
     </header>
 
     <main class="app-content">
       <!-- Start Camera Panel -->
       <div id="start-panel" class="glass-card" style="text-align: center; margin-bottom: 20px;">
-        <p style="margin-bottom: 16px; color: var(--text-main);">背面カメラを起動してスキャンします</p>
+        <p style="margin-bottom: 16px; color: var(--text-main);">高精度カメラを起動してスキャンします</p>
         <button id="start-camera-btn" class="primary-btn">📸 カメラを起動</button>
       </div>
 
-      <!-- Scanner Panel -->
-      <div id="scanner-panel" class="glass-card hidden">
-        <div id="reader-container">
-          <div id="reader"></div>
+      <!-- Scanner Panel (Custom Video Player) -->
+      <div id="scanner-panel" class="glass-card hidden" style="padding: 16px;">
+        <div id="reader-container" style="position: relative; border-radius: 12px; overflow: hidden; background: #000; display: flex; justify-content: center; align-items: center; min-height: 250px;">
+          <!-- ブラウザ標準のカメラストリームをここに流し込みます -->
+          <video id="video-stream" playsinline autoplay muted style="width: 100%; height: auto; max-height: 60vh; object-fit: cover; display: block;"></video>
+          
+          <!-- カメラの上に描画する読み取りターゲット枠（赤線） -->
+          <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 85%; height: 80px; border: 2px solid rgba(255, 60, 60, 0.8); border-radius: 4px; pointer-events: none; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);"></div>
         </div>
-        <p class="instruction">医薬品のGS1バーコードを枠内に写してください</p>
+        <p class="instruction" style="margin-top: 16px; font-weight: 600; color: #fff;">赤い枠の中心にしっかり合わせてください</p>
       </div>
 
       <!-- Loading Panel -->
@@ -90,6 +101,8 @@
       </div>
     </main>
   </div>
-  <script src="app.js"></script>
+  
+  <!-- ES Modulesでapp.jsを読み込む -->
+  <script type="module" src="app.js"></script>
 </body>
 </html>
