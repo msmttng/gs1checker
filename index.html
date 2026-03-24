@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>医薬品スキャナー</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- html5-qrcode library for scanning -->
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+</head>
+<body>
+  <div id="app">
+    <header class="app-header">
+      <div class="logo">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon"><path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z"/><path d="m8.5 8.5 7 7"/></svg>
+        <h1>PharmaScan</h1>
+      </div>
+      <p>GS1バーコードスキャナー</p>
+    </header>
+
+    <main class="app-content">
+      <!-- Scanner Panel -->
+      <div id="scanner-panel" class="glass-card">
+        <div id="reader-container">
+          <div id="reader"></div>
+        </div>
+        <p class="instruction">医薬品のGS1バーコードを枠内に写してください</p>
+      </div>
+
+      <!-- Loading Panel -->
+      <div id="loading-panel" class="glass-card hidden">
+        <div class="loader-container">
+          <div class="cube-loader">
+            <div class="cube cube1"></div>
+            <div class="cube cube2"></div>
+            <div class="cube cube4"></div>
+            <div class="cube cube3"></div>
+          </div>
+        </div>
+        <p class="loading-text">データベース照会中...</p>
+        <p class="scanned-code" id="loading-code-display"></p>
+      </div>
+
+      <!-- Result Panel -->
+      <div id="result-panel" class="glass-card hidden">
+        <div class="result-header">
+          <h2>検索結果</h2>
+          <span id="res-status" class="status-badge success">取得成功</span>
+        </div>
+        
+        <div class="data-group main-info">
+          <div class="data-item full-width">
+            <span class="label">商品名</span>
+            <span class="value lg text-gradient" id="res-name">--</span>
+          </div>
+          <div class="data-item full-width">
+            <span class="label">GS1 (GTIN)</span>
+            <span class="value mono" id="res-gtin">--</span>
+          </div>
+        </div>
+
+        <div class="data-grid">
+          <div class="data-item">
+            <span class="label">現在庫</span>
+            <span class="value md" id="res-stock">--</span>
+          </div>
+          <div class="data-item">
+            <span class="label">棚番</span>
+            <span class="value md highlight" id="res-shelf">--</span>
+          </div>
+          <div class="data-item full-width">
+            <span class="label">最終納品日</span>
+            <span class="value" id="res-delivery">--</span>
+          </div>
+        </div>
+
+        <button id="scan-again-btn" class="primary-btn">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/></svg>
+          続けてスキャン
+        </button>
+      </div>
+    </main>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
