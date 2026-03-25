@@ -26,11 +26,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // -------------------------------------------------------------
     // AsReader 連携ロジック (HIDキーボードエミュレーション)
     // -------------------------------------------------------------
-    
+    let scanTimeout = null;
+
     // 常にインプットフィールドにフォーカスを当てておく（トリガーを押すだけで入力されるようにする）
     function refocus() {
         if (barcodeInput) {
-            barcodeInput.value = '';
+            if (!barcodeInput.value) {
+                barcodeInput.value = '';
+            }
             // iOS Safariでソフトウェアキーボードが不要に上がらないようにするための制御
             // （ただしAsReader接続中は通常ソフトウェアキーボードは非表示になります）
             barcodeInput.focus();
@@ -40,11 +43,39 @@ document.addEventListener('DOMContentLoaded', () => {
     // 画面ロード時に自動フォーカス
     setTimeout(refocus, 300);
 
-    // AsReaderがバーコードを読み取り、最後に「Enter（改行）」を入力した瞬間に発動
+    // iOSブラウザ向けに、画面のどこを触っても確実に入力枠にフォーカスを戻す
+    document.addEventListener('click', (e) => {
+        // 現在入力パネルが表示されている場合のみ
+        if (inputPanel && !inputPanel.classList.contains('hidden')) {
+            if (e.target !== barcodeInput) {
+                refocus();
+            }
+        }
+    });
+
+    // 1. スキャナの入力が高速で行われることを利用し、Enterがなくても一定時間（0.5秒）入力が止まれば「スキャン完了」とみなす
+    barcodeInput.addEventListener('input', (e) => {
+        const val = barcodeInput.value.trim();
+        if (!val) return;
+        
+        clearTimeout(scanTimeout);
+        scanTimeout = setTimeout(() => {
+            // スキャナの入力が0.5秒間止まったら自動送信 (短すぎるバーコードは無視するかチェック)
+            if (barcodeInput.value.trim().length >= 6) {
+                const finalCode = barcodeInput.value.trim();
+                barcodeInput.value = ''; // 送信前にクリア
+                processScannedCode(finalCode);
+            }
+        }, 500);
+    });
+
+    // 2. もしAsReaderが正しく「Enter（改行）」を入力した場合は即座に発動
     scannerForm.addEventListener('submit', (e) => {
         e.preventDefault(); // 画面リロードを防ぐ
+        clearTimeout(scanTimeout); // タイマー読み取りをキャンセル
         const rawCode = barcodeInput.value.trim();
         if (rawCode) {
+            barcodeInput.value = '';
             processScannedCode(rawCode);
         }
     });
