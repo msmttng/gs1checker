@@ -32,7 +32,7 @@
       </div>
 
       <!-- Loading Panel -->
-      <div id="loading-panel" class="glass-card hidden">
+      <div id="loading-panel" class="glass-card hidden" style="margin-bottom: 20px;">
         <div class="loader-container">
           <div class="cube-loader">
             <div class="cube cube1"></div>
@@ -43,6 +43,25 @@
         </div>
         <p class="loading-text">データベース照会中...</p>
         <p class="scanned-code" id="loading-code-display"></p>
+      </div>
+
+      <!-- Manual Search Panel -->
+      <div id="manual-search-panel" class="glass-card" style="margin-bottom: 20px;">
+        <p style="margin-bottom: 12px; color: var(--text-main); font-weight: 600; font-size: 1rem;">薬品名 手動検索</p>
+        <form id="text-search-form" style="display: flex; gap: 8px;">
+          <input type="text" id="text-search-input" placeholder="薬品名の一部を入力 (ひらがな可)" autocomplete="off" style="flex:1; padding: 14px; font-size: 1.1rem; border-radius: 8px; border: 1px solid var(--primary); background: rgba(255,255,255,0.1); color: #fff; outline: none;">
+          <button type="submit" id="text-search-btn" class="primary-btn" style="padding: 12px 16px; width: auto; min-width: 80px;">検索</button>
+        </form>
+      </div>
+
+      <!-- Text Search List Results -->
+      <div id="text-result-panel" class="glass-card hidden" style="margin-bottom: 20px;">
+        <div class="result-header">
+          <h2>手動検索結果</h2>
+        </div>
+        <div id="text-result-list" style="display: flex; flex-direction: column; gap: 12px; margin-top: 16px;">
+          <!-- JS will populate items here -->
+        </div>
       </div>
 
       <!-- Result Panel -->

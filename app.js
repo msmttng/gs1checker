@@ -20,6 +20,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const elStatus = document.getElementById('res-status');
     const loadingCode = document.getElementById('loading-code-display');
 
+    // 手動検索用UI要素
+    const textSearchForm = document.getElementById('text-search-form');
+    const textSearchInput = document.getElementById('text-search-input');
+    const textResultPanel = document.getElementById('text-result-panel');
+    const textResultList = document.getElementById('text-result-list');
+
     // 【重要】ここに現在のGASのURL (AKfycb...) を入れます
     const GAS_URL = "https://script.google.com/macros/s/AKfycbwDhj91LpWaF6OWhTmr6hbYLgScu0tlBcs2Y4nyXvg2WAwybHYGd5-V579tf0I5_H2dCQ/exec";
 
@@ -116,6 +122,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // 入力パネルを隠してローディング画面を出す
+        resultPanel.classList.add('hidden');
+        if (textResultPanel) textResultPanel.classList.add('hidden');
         inputPanel.classList.add('hidden');
         loadingPanel.classList.remove('hidden');
         
@@ -149,11 +157,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // -------------------------------------------------------------
-    // 結果表示ロジック
+    // 結果表示ロジック (バーコードスキャン用単一結果)
     // -------------------------------------------------------------
     function displayResults(data, gtin) {
         loadingPanel.classList.add('hidden');
         resultPanel.classList.remove('hidden');
+        if (textResultPanel) textResultPanel.classList.add('hidden');
 
         if (data.status === 'error') {
             elName.textContent = "エラー"; elGtin.textContent = gtin; elStock.textContent = "--";
@@ -203,6 +212,70 @@ document.addEventListener('DOMContentLoaded', () => {
             inputPanel.classList.remove('hidden');
             // 即座に次のバーコードを待機
             refocus();
+        });
+    }
+
+    // -------------------------------------------------------------
+    // 手動テキスト検索ロジック
+    // -------------------------------------------------------------
+    if (textSearchForm) {
+        textSearchForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const query = textSearchInput.value.trim();
+            if (!query) return;
+
+            inputPanel.classList.add('hidden');
+            resultPanel.classList.add('hidden');
+            if (textResultPanel) textResultPanel.classList.add('hidden');
+            loadingPanel.classList.remove('hidden');
+            loadingCode.innerHTML = `検索ワード: <b style="color:#fff;">${query}</b>`;
+            textSearchInput.blur();
+
+            try {
+                const payload = { action: 'search', query: query };
+                const response = await fetch(GAS_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify(payload)
+                });
+                if (!response.ok) throw new Error("HTTP error");
+                const dataArray = await response.json();
+                displayTextResults(dataArray, query);
+            } catch (error) {
+                console.error(error);
+                loadingPanel.classList.add('hidden');
+                if (textResultPanel) textResultPanel.classList.remove('hidden');
+                textResultList.innerHTML = `<div style="color:#ef4444;">通信エラーが発生しました</div>`;
+            }
+        });
+    }
+
+    function displayTextResults(dataArray, query) {
+        loadingPanel.classList.add('hidden');
+        if (textResultPanel) textResultPanel.classList.remove('hidden');
+        inputPanel.classList.remove('hidden');
+
+        if (!Array.isArray(dataArray) || dataArray.length === 0) {
+            textResultList.innerHTML = `<div style="color:#94a3b8; text-align:center;">「${query}」に一致する薬品は見つかりません</div>`;
+            return;
+        }
+
+        textResultList.innerHTML = '';
+        dataArray.forEach(item => {
+            const div = document.createElement('div');
+            div.style.cssText = "background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; border-left: 4px solid var(--primary);";
+            
+            let stockColor = (item.stock > 0 && String(item.stock) !== '不明') ? '#10b981' : '#f59e0b';
+            let stockNum = isNaN(Number(item.stock)) ? item.stock : `${item.stock}${item.unit||''}`;
+
+            div.innerHTML = `
+                <div style="font-weight: 600; margin-bottom: 6px; font-size: 1.1rem; color: #fff;">${item.name}</div>
+                <div style="display: flex; justify-content: space-between; font-size: 0.95rem; color: #cbd5e1;">
+                    <span>在庫: <strong style="color: ${stockColor};">${stockNum}</strong></span>
+                    <span>棚番: <strong style="color: #60a5fa;">${item.shelf || '未設定'}</strong></span>
+                </div>
+            `;
+            textResultList.appendChild(div);
         });
     }
 });
