@@ -162,15 +162,29 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        elName.textContent = data.productName || "不明な医薬品";
+        elName.textContent = data.isSubstitute ? `⚠️代替品: ${data.productName}` : (data.productName || "不明な医薬品");
+        if (data.isSubstitute) {
+            elName.style.color = "#ea580c"; // Orange for warning
+            elName.style.fontWeight = "bold";
+        } else {
+            elName.style.color = "";
+            elName.style.fontWeight = "";
+        }
+
         elGtin.textContent = gtin || data.gtin || "--";
         elStock.textContent = data.stock != null ? `${data.stock} 個` : "--";
         elShelf.textContent = data.shelf || "未設定";
         elDelivery.textContent = data.lastDeliveryDate || "--";
 
-        if (data.stock > 0) { elStatus.className = "status-badge success"; elStatus.textContent = "在庫あり"; } 
-        else if (data.stock === 0) { elStatus.className = "status-badge warning"; elStatus.textContent = "品切れ"; } 
-        else { elStatus.className = "status-badge error"; elStatus.textContent = "登録なし"; }
+        if (data.isSubstitute) { 
+            elStatus.className = "status-badge warning"; elStatus.textContent = "同成分品の在庫有"; 
+        } else if (data.stock > 0) { 
+            elStatus.className = "status-badge success"; elStatus.textContent = "在庫あり"; 
+        } else if (data.stock === 0) { 
+            elStatus.className = "status-badge warning"; elStatus.textContent = "品切れ"; 
+        } else { 
+            elStatus.className = "status-badge error"; elStatus.textContent = "登録なし"; 
+        }
     }
 
     // デバッグ用モック
