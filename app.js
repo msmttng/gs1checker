@@ -21,6 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const loadingCode = document.getElementById('loading-code-display');
 
     // 手動検索用UI要素
+    const manualSearchPanel = document.getElementById('manual-search-panel');
     const textSearchForm = document.getElementById('text-search-form');
     const textSearchInput = document.getElementById('text-search-input');
     const textResultPanel = document.getElementById('text-result-panel');
@@ -121,13 +122,16 @@ document.addEventListener('DOMContentLoaded', () => {
             gtin = cleanText.length === 13 ? '0' + cleanText : cleanText;
         }
 
-        // AsReaderのレーザー照射引きっぱなしバグを防ぐため明示的にフォーカスを外す
+        // AsReaderのレーザー照射引きっぱなしバグを防ぐため明示的に全画面のフォーカスを外す
         if (barcodeInput) barcodeInput.blur();
+        if (textSearchInput) textSearchInput.blur();
+        document.querySelectorAll('input').forEach(i => i.blur()); // 念のため全inputを外す
 
-        // 入力パネルを隠してローディング画面を出す
+        // 入力パネル群をすべて隠してローディング画面を出す
         resultPanel.classList.add('hidden');
         if (textResultPanel) textResultPanel.classList.add('hidden');
         inputPanel.classList.add('hidden');
+        if (manualSearchPanel) manualSearchPanel.classList.add('hidden'); // 手動枠も隠す (AsReader暴発防止)
         loadingPanel.classList.remove('hidden');
         
         // デバッグ用に抽出データを画面に表示
@@ -213,6 +217,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // 結果画面を隠して、入力画面に戻す
             resultPanel.classList.add('hidden');
             inputPanel.classList.remove('hidden');
+            if (manualSearchPanel) manualSearchPanel.classList.remove('hidden');
             // 即座に次のバーコードを待機
             refocus();
         });
@@ -228,11 +233,14 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!query) return;
 
             inputPanel.classList.add('hidden');
+            if (manualSearchPanel) manualSearchPanel.classList.add('hidden');
             resultPanel.classList.add('hidden');
             if (textResultPanel) textResultPanel.classList.add('hidden');
             loadingPanel.classList.remove('hidden');
             loadingCode.innerHTML = `検索ワード: <b style="color:#fff;">${query}</b>`;
+            
             textSearchInput.blur();
+            document.querySelectorAll('input').forEach(i => i.blur());
 
             try {
                 const payload = { action: 'search', query: query };
@@ -257,6 +265,7 @@ document.addEventListener('DOMContentLoaded', () => {
         loadingPanel.classList.add('hidden');
         if (textResultPanel) textResultPanel.classList.remove('hidden');
         inputPanel.classList.remove('hidden');
+        if (manualSearchPanel) manualSearchPanel.classList.remove('hidden');
 
         if (!Array.isArray(dataArray) || dataArray.length === 0) {
             textResultList.innerHTML = `<div style="color:#94a3b8; text-align:center;">「${query}」に一致する薬品は見つかりません</div>`;
