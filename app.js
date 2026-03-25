@@ -81,6 +81,21 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // -------------------------------------------------------------
+    // AsBrowser 専用アプリ向けのネイティブコールバック関数群
+    // (AsBrowserアプリを利用した場合、キーボード制御なしで直接データを受け取れます)
+    // -------------------------------------------------------------
+    window.onBarcodeScanned = function(barcodeData) {
+        if (barcodeData) {
+            processScannedCode(barcodeData);
+        }
+    };
+    window.AsReaderCallback = function(barcodeData) {
+        if (barcodeData) {
+            processScannedCode(barcodeData);
+        }
+    };
+
+    // -------------------------------------------------------------
     // GTIN抽出とGASへのデータ送信
     // -------------------------------------------------------------
     function processScannedCode(decodedText) {
