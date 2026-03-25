@@ -31,6 +31,32 @@ document.addEventListener('DOMContentLoaded', () => {
     const GAS_URL = "https://script.google.com/macros/s/AKfycbwDhj91LpWaF6OWhTmr6hbYLgScu0tlBcs2Y4nyXvg2WAwybHYGd5-V579tf0I5_H2dCQ/exec";
 
     // -------------------------------------------------------------
+    // AsBrowser ネイティブAPI 安全ラッパー
+    // -------------------------------------------------------------
+    function safeStopScan() {
+        if (typeof stopScan === 'function') {
+            try { stopScan(); } catch(e){}
+        } else if (window.AsBrowser && typeof window.AsBrowser.stopScan === 'function') {
+            try { window.AsBrowser.stopScan(); } catch(e){}
+        }
+    }
+
+    function safeStartScan() {
+        if (typeof startScan === 'function') {
+            try { startScan(); } catch(e){}
+        } else if (window.AsBrowser && typeof window.AsBrowser.startScan === 'function') {
+            try { window.AsBrowser.startScan(); } catch(e){}
+        }
+    }
+
+    // 要件1: ページ読み込み完了時点ではスキャナーをアイドル状態にする
+    safeStopScan();
+
+    // 要件3: ページ離脱・破棄時にも stopScan() を呼ぶ
+    window.addEventListener('beforeunload', () => { safeStopScan(); });
+    window.addEventListener('unload', () => { safeStopScan(); });
+
+    // -------------------------------------------------------------
     // AsReader 連携ロジック (HIDキーボードエミュレーション)
     // -------------------------------------------------------------
     let scanTimeout = null;
@@ -126,6 +152,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (barcodeInput) barcodeInput.blur();
         if (textSearchInput) textSearchInput.blur();
         document.querySelectorAll('input').forEach(i => i.blur()); // 念のため全inputを外す
+
+        // 要件2: コールバック後（データ受信後）は必ず stopScan() を呼ぶ
+        safeStopScan();
 
         // 入力パネル群をすべて隠してローディング画面を出す
         resultPanel.classList.add('hidden');
@@ -241,6 +270,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             textSearchInput.blur();
             document.querySelectorAll('input').forEach(i => i.blur());
+            safeStopScan(); // 手動検索時も念のためストップ
 
             try {
                 const payload = { action: 'search', query: query };
