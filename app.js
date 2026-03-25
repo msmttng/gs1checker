@@ -121,6 +121,9 @@ document.addEventListener('DOMContentLoaded', () => {
             gtin = cleanText.length === 13 ? '0' + cleanText : cleanText;
         }
 
+        // AsReaderのレーザー照射引きっぱなしバグを防ぐため明示的にフォーカスを外す
+        if (barcodeInput) barcodeInput.blur();
+
         // 入力パネルを隠してローディング画面を出す
         resultPanel.classList.add('hidden');
         if (textResultPanel) textResultPanel.classList.add('hidden');
